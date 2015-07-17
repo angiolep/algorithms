@@ -1,11 +1,29 @@
 package algorithms
 
+import scala.annotation.tailrec
+
 
 trait DisjointSet {
+  private[algorithms] val ids: Array[Int]
+
   private[algorithms] def rank: Int
+
   def union(p: Int, q: Int): DisjointSet
+
   def find(x: Int): Int
+
+  @tailrec
+  final def union(pairs: List[(Int, Int)]): DisjointSet = {
+    if (pairs.isEmpty) this
+    else {
+      val (p, q) = pairs.head
+      union(p, q).union(pairs.tail)
+    }
+  }
+
+  override def toString() = ids.mkString(" ")
 }
+
 
 private[algorithms] object DisjointSet {
   def make(rank: Int) = Array.tabulate[Int](rank){x => x}
@@ -14,9 +32,10 @@ private[algorithms] object DisjointSet {
 
 // -----------------------------------------
 // array elements are set representatives
-class EagerDisjointSet private[algorithms](ids: Array[Int]) extends DisjointSet {
+class EagerDisjointSet private[algorithms](reps: Array[Int]) extends DisjointSet {
 
-  private[algorithms] val rank = ids.distinct.size
+  private[algorithms] val ids = reps
+  private[algorithms] def rank = ids.distinct.size
 
   // BAD: at worse 2+2*N accesses
   def union(p: Int, q: Int): DisjointSet = {
@@ -42,8 +61,9 @@ object EagerDisjointSet {
 
 // --------------------------
 // hold forest of trees; array elements are parents; roots are set representatives
-class LazyDisjointSet private[algorithms](ids: Array[Int]) extends DisjointSet {
+class LazyDisjointSet private[algorithms](reps: Array[Int]) extends DisjointSet {
 
+  private[algorithms] val ids = reps
   private[algorithms] val rank = ids.map(root(_)).distinct.size
 
   // BAD: at worse N accesses (severely impact both union and find)
@@ -79,23 +99,23 @@ object LazyDisjointSet {
 
 // -------------------------
 // improve lazy approach by keeping tree sizes minimal
-class WeightedDisjointSet private[algorithms](ids: Array[Int], sizes: Array[Int])
-  extends LazyDisjointSet(ids) {
+class WeightedDisjointSet private[algorithms](reps: Array[Int], sizes: Array[Int])
+  extends LazyDisjointSet(reps) {
 
   override def union(p: Int, q: Int): DisjointSet = {
     val rp = root(p)
     val rq = root(q)
     if (rp != rq) {
       // put the smaller tree below the larger tree
-      if (sizes(rp) <= sizes(rq)) {
-        new WeightedDisjointSet(
-          ids.updated(rp, rq),
-          sizes.updated(rq, sizes(rq) + sizes(rp))
-        )
-      } else {
+      if (sizes(rp) >= sizes(rq)) {
         new WeightedDisjointSet(
           ids.updated(rq, rp),
           sizes.updated(rp, sizes(rq) + sizes(rp))
+        )
+      } else {
+        new WeightedDisjointSet(
+          ids.updated(rp, rq),
+          sizes.updated(rq, sizes(rq) + sizes(rp))
         )
       }
     }
