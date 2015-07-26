@@ -1,33 +1,29 @@
 package algorithms
 
-import scala.annotation.tailrec
-
 
 trait DisjointSet {
   private[algorithms] val ids: Array[Int]
 
-  private[algorithms] def rank: Int
+  def rank: Int
 
-  def union(p: Int, q: Int): DisjointSet
+  def union(p: Int, q: Int): Unit
 
   def find(x: Int): Int
 
-  @tailrec
-  final def union(pairs: List[(Int, Int)]): DisjointSet = {
-    if (pairs.isEmpty) this
-    else {
-      val (p, q) = pairs.head
-      union(p, q).union(pairs.tail)
-    }
-  }
+  def union(pairs: (Int, Int)*): Unit = pairs.foreach { case (p, q) => union(p, q)}
+
+  def areConnected(p: Int, q: Int): Boolean = find(p) == find(q)
 
   override def toString() = ids.mkString(" ")
 }
 
 
-private[algorithms] object DisjointSet {
-  def make(rank: Int) = Array.tabulate[Int](rank){x => x}
+object DisjointSet {
+  private[algorithms] def make(size: Int) = Array.tabulate[Int](size){x => x}
+
+  def apply(size: Int) = WeightedDisjointSet(size)
 }
+
 
 
 // -----------------------------------------
@@ -35,18 +31,14 @@ private[algorithms] object DisjointSet {
 class EagerDisjointSet private[algorithms](reps: Array[Int]) extends DisjointSet {
 
   private[algorithms] val ids = reps
-  private[algorithms] def rank = ids.distinct.size
+
+  def rank = ids.distinct.size
 
   // BAD: at worse 2+2*N accesses
-  def union(p: Int, q: Int): DisjointSet = {
+  def union(p: Int, q: Int): Unit = {
     val idp = ids(p)
     val idq = ids(q)
-    new EagerDisjointSet(
-      ids.map { id =>
-        if (id == idp) idq
-        else id
-      }
-    )
+    ids.indices.foreach { k => if (ids(k) == idp) ids(k) = idq }
   }
 
   // GOOD: it does one access only :-)
@@ -54,7 +46,7 @@ class EagerDisjointSet private[algorithms](reps: Array[Int]) extends DisjointSet
 }
 
 object EagerDisjointSet {
-  def apply(rank: Int) = new EagerDisjointSet(DisjointSet.make(rank))
+  def apply(size: Int) = new EagerDisjointSet(DisjointSet.make(size))
 }
 
 
@@ -64,7 +56,8 @@ object EagerDisjointSet {
 class LazyDisjointSet private[algorithms](reps: Array[Int]) extends DisjointSet {
 
   private[algorithms] val ids = reps
-  private[algorithms] val rank = ids.map(root(_)).distinct.size
+
+  def rank = ids.map(root(_)).distinct.size
 
   // BAD: at worse N accesses (severely impact both union and find)
   protected def root(p: Int): Int = {
@@ -74,16 +67,10 @@ class LazyDisjointSet private[algorithms](reps: Array[Int]) extends DisjointSet 
   }
 
   // BAD: at worse 2*N+1 accesses
-  def union(p: Int, q: Int): DisjointSet = {
+  def union(p: Int, q: Int): Unit = {
     val rp = root(p)
     val rq = root(q)
-    if (rp != rq) {
-      new LazyDisjointSet(
-        ids.updated(rp, rq)
-      )
-    }
-    else
-      this
+    if (rp != rq) ids(rp) = rq
   }
 
   // BAD: at worse N accesses (because of root lookup)
@@ -92,7 +79,7 @@ class LazyDisjointSet private[algorithms](reps: Array[Int]) extends DisjointSet 
 
 
 object LazyDisjointSet {
-  def apply(rank: Int) = new LazyDisjointSet(DisjointSet.make(rank))
+  def apply(size: Int) = new LazyDisjointSet(DisjointSet.make(size))
 }
 
 
@@ -102,29 +89,23 @@ object LazyDisjointSet {
 class WeightedDisjointSet private[algorithms](reps: Array[Int], sizes: Array[Int])
   extends LazyDisjointSet(reps) {
 
-  override def union(p: Int, q: Int): DisjointSet = {
+  override def union(p: Int, q: Int): Unit = {
     val rp = root(p)
     val rq = root(q)
     if (rp != rq) {
       // put the smaller tree below the larger tree
       if (sizes(rp) >= sizes(rq)) {
-        new WeightedDisjointSet(
-          ids.updated(rq, rp),
-          sizes.updated(rp, sizes(rq) + sizes(rp))
-        )
+        ids(rq) = rp
+        sizes(rp) = sizes(rq) + sizes(rp)
       } else {
-        new WeightedDisjointSet(
-          ids.updated(rp, rq),
-          sizes.updated(rq, sizes(rq) + sizes(rp))
-        )
+        ids(rp) = rq
+        sizes(rq) = sizes(rq) + sizes(rp)
       }
     }
-    else
-      this
   }
 }
 
 
 object WeightedDisjointSet {
-  def apply(rank: Int) = new WeightedDisjointSet(DisjointSet.make(rank), Array.fill(rank)(1))
+  def apply(size: Int) = new WeightedDisjointSet(DisjointSet.make(size), Array.fill(size)(1))
 }
